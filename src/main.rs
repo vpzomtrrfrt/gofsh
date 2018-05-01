@@ -7,6 +7,7 @@ use rand::Rng;
 fn get_commands() -> Vec<String> {
     let path = std::env::var("PATH").expect("Missing PATH");
     let output = std::process::Command::new("find")
+        .arg("-L")
         .args(path.split(":"))
         .arg("-type")
         .arg("f")
@@ -14,9 +15,12 @@ fn get_commands() -> Vec<String> {
         .output()
         .expect("Failed to find commands");
     let stdout = String::from_utf8(output.stdout).expect("Failed to parse find output as UTF8");
-    return stdout.trim().split("\n").map(|x| {
+    let mut tr: Vec<_> = stdout.trim().split("\n").map(|x| {
         std::path::Path::new(x).file_name().expect("Unable to find file name").to_str().unwrap().to_string()
     }).collect();
+    tr.sort();
+    tr.dedup();
+    tr
 }
 
 fn print_help() {
