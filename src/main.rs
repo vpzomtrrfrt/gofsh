@@ -48,24 +48,40 @@ fn run_cmd(cmd: &str) -> Result<(), std::io::Error> {
     Ok(())
 }
 
+fn draw_into(hand: &mut Vec<String>, draw_pile: &mut Vec<String>) -> String {
+    let index = rand::thread_rng().gen_range(0, draw_pile.len());
+    let value = draw_pile.swap_remove(index);
+    hand.push(value.clone());
+    value
+}
+
 struct Game {
+    commands: Vec<String>,
     draw_pile: Vec<String>,
-    my_hand: Vec<String>
+    my_hand: Vec<String>,
+    other_hand: Vec<String>
 }
 
 impl Game {
-    fn draw(&mut self) {
-        let index = rand::thread_rng().gen_range(0, self.draw_pile.len());
-        self.my_hand.push(self.draw_pile.swap_remove(index));
+    fn draw(&mut self) -> String {
+        draw_into(&mut self.my_hand, &mut self.draw_pile)
+    }
+
+    fn draw_other(&mut self) {
+        draw_into(&mut self.other_hand, &mut self.draw_pile);
     }
 
     fn new() -> Self {
         let commands = get_commands();
         Game {
-            draw_pile: commands.into_iter()
+            draw_pile: commands
+                .clone()
+                .into_iter()
                 .flat_map(|x| vec![x.clone(), x.clone(), x.clone(), x.clone()])
                 .collect(),
-            my_hand: vec![]
+            commands,
+            my_hand: vec![],
+            other_hand: vec![]
         }
     }
 
@@ -77,6 +93,34 @@ impl Game {
             .collect::<Vec<_>>()
             .join("\n");
         pager(&text).unwrap_or_else(|e| eprintln!("{:?}", e));
+    }
+
+    fn ask(&mut self, data: &str) {
+        let data = data.trim();
+        if self.commands.iter().position(|c| c == data).is_none() {
+            println!("gofsh: No such card.");
+            return;
+        }
+        let mut received = 0;
+        while let Some(pos) = self.other_hand.iter().position(|c| c == data) {
+            received += 1;
+            self.my_hand.push(self.other_hand.swap_remove(pos));
+        }
+        if received == 0 {
+            println!("gofsh: Go Fish!");
+            println!("gofsh: You drew {}", self.draw());
+        }
+        else {
+            println!(
+                "gofsh: You received {} {} of {}",
+                received,
+                if received == 1 {
+                    "copy"
+                } else {
+                    "copies"
+                },
+                data);
+        }
     }
 
     fn run_cmd(&self, data: &str) {
@@ -107,6 +151,7 @@ impl Game {
 
         for _ in 0..start_amount {
             self.draw();
+            self.draw_other();
         }
 
         let stdin = std::io::stdin();
@@ -124,6 +169,7 @@ impl Game {
                 "help" => print_help(),
                 "hand" => self.print_hand(),
                 "run" => self.run_cmd(data),
+                "ask" => self.ask(data),
                 _ => print_help()
             }
         }
